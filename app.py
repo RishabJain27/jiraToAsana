@@ -7,31 +7,57 @@ import json
 
 app = Flask(__name__)
 
-@app.route('/jiraWebHook', methods=['GET','POST'])
-def webHook():
-    pprint('HERE')
-    return 'Hello World'
-
-
-@app.route('/jiraProjects', methods=['GET'])
-def getProjects():
-    url = "https://442561275-team-mcpys4njze6e.atlassian.net/rest/api/3/project/search"
-
-    auth = HTTPBasicAuth("alan-phnx@442561275.asanatest1.us", "ATATT3xFfGF0dEdMkTXmZ4gXrwLmIYq87EqI_BSapeR_NcLmHZGZ6-HU86lD0RmRgUzbkFAP0Ardw244vvVqG5XtPaLn_yA8ebOOWrbIUPj6A38hoylAYctjubKILRveFkwL4V1HNDLjJuBJVGAG4zuIKNm8vOBFoFOlDJ5reAEWhO4Xs47-3-M=BA3485FD")
-
-    headers = {
-        "Accept": "application/json"
-    }
-
-    response = requests.request(
-    "GET",
-    url,
-    headers=headers,
-    auth=auth
-    )
-
-    return response
-
+def parseIssueCreation(request_data):
+    payload = request_data['issue']['fields']
+    
+    title = ''
+    description = ''
+    assignee = ''
+    dueDate = ''
+    status = ''
+    priority = ''
+    if 'summary' in  payload and payload['summary'] != None:
+        title = payload['summary']
+    if 'description' in payload and payload['description'] != None:
+        description = payload['description']
+    if 'assignee' in payload and payload['assignee'] != None:
+        assignee = payload['assignee']['displayName']
+    if 'duedate' in payload and payload['duedate'] != None:
+        dueDate = payload['duedate']
+    if 'status' in payload and payload['status'] != None:
+        status = payload['status']['name']
+    if 'priority' in payload and payload['priority'] != None: 
+        priority = payload['priority']['name']
+        
+    pprint(title)
+    pprint(description)
+    pprint(assignee)
+    pprint(dueDate)
+    pprint(status)
+    print(priority)
+    
+def parseIssueUpdate(payload):
+    pprint("in issue update")
+    
+def parseIssueDeleted(payload):
+    pprint("in issue delete")
+    
+@app.route('/jiraWebHook', methods=['POST'])
+def webHookJira():
+    request_data = request.get_json()
+    
+    webHookEvent = request_data['webhookEvent']
+    match webHookEvent:
+        case "jira:issue_created":
+            parseIssueCreation(request_data)
+        case "jira:issue_updated":
+            parseIssueUpdate(request_data)
+        case "jira:issue_deleted":
+            parseIssueDeleted(request_data)
+        case _:
+            pprint("Not recognized Web Hook Event")
+            
+    return ''
 
 if __name__ == "__main__":
     app.run(debug=True)
