@@ -13,8 +13,11 @@ def start():
 
 @app.route('/jiraWebHook', methods=['GET', 'POST'])
 def receivedWebHook():
-    req_data = request.get_json()
-    return req_data
+    content_type = request.headers.get('Content-Type')
+    if (content_type == 'application/json'):
+        req_data = request.get_json()
+        return req_data
+    return ''
 
 @app.route('/jiraProjects', methods=['GET'])
 def getProjects():
