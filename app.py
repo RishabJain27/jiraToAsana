@@ -3,9 +3,40 @@ from flask import request
 import requests
 from requests.auth import HTTPBasicAuth
 from pprint import pprint
-import json
+import asana
+from asana.rest import ApiException
 
 app = Flask(__name__)
+
+configuration = asana.Configuration()
+configuration.access_token = '2/1206848302395917/1206874990632238:b503b349b4150c8f73c0b5c01d1ec69c'
+api_client = asana.ApiClient(configuration)
+tasks_api_instance = asana.TasksApi(api_client)
+
+
+def getWebProductionTasks():
+    work_production_gid = "1206848441607075"
+    opts = {}
+    listTaskNames = []
+    listMilestoneNames = []
+    try: 
+        # Get tasks from a project
+        api_response = tasks_api_instance.get_tasks_for_project(work_production_gid, opts)
+        for data in api_response:
+            if data['resource_subtype'] == 'default_task':
+                listTaskNames.append(data['name'])
+            if data['resource_subtype'] == 'milestone':
+                listMilestoneNames.append(data['name'])
+    except ApiException as e:
+        pprint("Exception when calling TasksApi->get_tasks_for_project: %s\n" % e)
+    
+    return listTaskNames, listMilestoneNames
+    
+def createAsanaTask(title, description, assignee, dueDate, status, priority):
+    pprint("create Task")
+    listTaskNames, listMileStoneNames = getWebProductionTasks()
+    pprint(listTaskNames)
+    pprint(listMileStoneNames)
 
 def parseIssueCreation(request_data):
     payload = request_data['issue']['fields']
@@ -16,6 +47,7 @@ def parseIssueCreation(request_data):
     dueDate = ''
     status = ''
     priority = ''
+    
     if 'summary' in  payload and payload['summary'] != None:
         title = payload['summary']
     if 'description' in payload and payload['description'] != None:
@@ -29,12 +61,7 @@ def parseIssueCreation(request_data):
     if 'priority' in payload and payload['priority'] != None: 
         priority = payload['priority']['name']
         
-    pprint(title)
-    pprint(description)
-    pprint(assignee)
-    pprint(dueDate)
-    pprint(status)
-    print(priority)
+    createAsanaTask(title, description, assignee, dueDate, status, priority)
     
 def parseIssueUpdate(payload):
     pprint("in issue update")
