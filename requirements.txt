@@ -12,3 +12,4 @@ packaging==24.0
 requests==2.31.0
 urllib3==2.2.1
 Werkzeug==3.0.1
+asana==5.0.5
