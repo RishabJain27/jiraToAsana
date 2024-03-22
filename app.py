@@ -25,7 +25,8 @@ auth = HTTPBasicAuth("alan-phnx@442561275.asanatest1.us", "ATATT3xFfGF0LB6vcgxkY
 headers = {
     "Accept": "application/json"
 }
-        
+
+#Creates Comments on Asana Task        
 def createComments(taskId, comment):
     body = {"data":{"text": comment}}
     try:
@@ -34,19 +35,24 @@ def createComments(taskId, comment):
     except ApiException as e:
         pprint("Exception when calling StoriesApi->create_story_for_task: %s\n" % e)
 
+#Handles Title Changes on Jira Issue and updates Asana Task Name
 def handleChangeTitle(currentTaskId, prevTitle, newTitle):
     updateTask(currentTaskId, {"name" : newTitle})
     
+    #Create Comment for new Name
     commentStr = "From Jira: Changed the Task Name from " + prevTitle + " to " + newTitle
     createComments(currentTaskId, commentStr)
 
+#Handles Priority Changes on Jira Issue and updates Asana Task Priority
 def handleChangePriority(currentTaskId, prevPriority, newPriority):
     priorityMap = {"High" : "1206874810766684", "Medium" : "1206874810766685", "Low" : "1206874810766686", "Lowest" : "1206874810766687", "Highest" : "1206874810766688"}
     updateTask(currentTaskId, {"custom_fields": {"1206874810766683" : priorityMap.get(newPriority)}})
     
-    commentStr = "From Jira changed the priority from " + prevPriority + " to " + newPriority
+    #Create Comment for new priority
+    commentStr = "From Jira: changed the priority from " + prevPriority + " to " + newPriority
     createComments(currentTaskId, commentStr)
-    
+
+#Handles Due Date Changes on Jira Issue and updates Asana Task Due Date   
 def handleChangeDueDate(currentTaskId, prevDate, newDate):
     updateTask(currentTaskId, {"due_on" : newDate})
     
@@ -65,12 +71,15 @@ def handleChangeDueDate(currentTaskId, prevDate, newDate):
     commentStr = "From Jira: Changed the Due Date from " + prevDate + " to " + newDate
     createComments(currentTaskId, commentStr)
 
+#Handles Description Changes on Jira Issue and updates Asana Task Description   
 def handleChangeDescription(currentTaskId, prevDescription, newDescription):
     updateTask(currentTaskId, {"notes" : newDescription})
     
+    #Create Comment for new Description
     commentStr = "From Jira: Updated the Description"
     createComments(currentTaskId, commentStr)    
-    
+
+#Handles Assignee Changes on Jira Issue and updates Asana Task Assignee     
 def handleChangeAssignee(currentTaskId, prevAssignee, newAssignee):
     userNameToIdMap = {"Alan PHNX" : "1206848302395917"}
     
@@ -83,14 +92,18 @@ def handleChangeAssignee(currentTaskId, prevAssignee, newAssignee):
     if newAssignee is None or newAssignee == '':
         newAssignee = 'No Assignee'
     
+    #Create Comment for new assignee
     commentStr = "From Jira: Changed Assignee from " + prevAssignee + " to " + newAssignee
     createComments(currentTaskId, commentStr)
-    
+
+#Handles Status Changes on Jira Issue and updates Asana Task     
 def handleChangeTaskStatus(currentTaskId, prevStatus, newStatus):
     if currentTaskId == '' or currentTaskId is None:
         return
     if prevStatus == newStatus:
         return
+    
+    #Map connecting jira status to Asana equivalent section Id's
     statusMap = {"To Do" : "1206848572644093", "In Progress" : "1206848307772957", "Ready for Launch" : "1206848572627398", "Launched": "1206884642739990"}
     section_gid = statusMap.get(newStatus)
     
@@ -108,9 +121,11 @@ def handleChangeTaskStatus(currentTaskId, prevStatus, newStatus):
         data = {"completed" : newCompleted}
         updateTask(currentTaskId, data)
 
+    #Create Comment for Status Change
     commentStr = "From Jira: Changed Task Status from " + prevStatus + " to " + newStatus
     createComments(currentTaskId, commentStr)
 
+#API call to Asana to delete Task given Task gid
 def deleteTaskById(task_gid):
     try:
         # Delete a task
@@ -118,6 +133,7 @@ def deleteTaskById(task_gid):
     except ApiException as e:
         print("Exception when calling TasksApi->delete_task: %s\n" % e)    
 
+#API call to Asana to update Task given task gid and data containing updated values
 def updateTask(taskId, data):
     body = {"data": data}
     opts = {}
@@ -128,6 +144,8 @@ def updateTask(taskId, data):
     except ApiException as e:
         pprint("Exception when calling TasksApi->update_task: %s\n" % e)        
 
+#Gets Task gid associated with provided jiraId
+#Allows option to retry in cases where Task isn't created in time before lookup API call
 def getTaskIdByJiraId(jiraId, retry):
     while retry >= 0:
         tasks = getWebProductionTasks()
@@ -140,6 +158,7 @@ def getTaskIdByJiraId(jiraId, retry):
             time.sleep(2)
     return ''
 
+#API call to Asana to get Task given Task gid
 def getTaskFromId(gid):
     try:
         # Get a task
@@ -148,7 +167,8 @@ def getTaskFromId(gid):
     except ApiException as e:
         pprint("Exception when calling TasksApi->get_task: %s\n" % e)
         return None
-
+#API call to get Task information and return jiraId associated with Task
+#returns None object if no jiraId associated with Asana Task
 def getJiraIdFromTask(gid):
     taskData = getTaskFromId(gid)
     if taskData is None:
@@ -160,6 +180,7 @@ def getJiraIdFromTask(gid):
     
     return None
 
+#API call to Asana to get all Task's gid associated with Web Production Requests Project
 def getWebProductionTasks():
     work_production_gid = "1206848441607075"
     opts = {}
@@ -172,7 +193,8 @@ def getWebProductionTasks():
         pprint("Exception when calling TasksApi->get_tasks_for_project: %s\n" % e)
     
     return []
-    
+
+#API call to Asana to create a new Task given key values    
 def createAsanaTask(title, description, assignee, dueDate, priority, type, jiraId):    
     if type == 'Task' or type == 'Bug':
         type = 'default_task'
@@ -213,6 +235,7 @@ def createAsanaTask(title, description, assignee, dueDate, priority, type, jiraI
     except ApiException as e:
         print("Exception when calling TasksApi->create_task: %s\n" % e)
 
+#Helper function to help parse Asana Task payload from API
 def parseJiraIssue(payload):
     title = ''
     description = ''
@@ -239,6 +262,8 @@ def parseJiraIssue(payload):
     
     return title, description, assignee, dueDate, status, priority, type
 
+#Creates a new Asana Task from new jira ticket
+#Getting new jira ticket information from WebHook connected to jira
 def parseIssueCreation(request_data):
     payload = request_data['issue']['fields']
     
@@ -247,6 +272,8 @@ def parseIssueCreation(request_data):
 
     createAsanaTask(title, description, assignee, dueDate, priority, type, jiraId)
 
+#Updates an existing Asana Task if an associated Task to Jira Ticket connection exists
+#Getting updated jira ticket information from Webhook connected to jira  
 def parseIssueUpdate(payload):
     jiraId = payload['issue']['key']
     currentTaskId = getTaskIdByJiraId(jiraId, 3)
@@ -271,13 +298,16 @@ def parseIssueUpdate(payload):
             handleChangePriority(currentTaskId, prevString, newString)
         elif field == 'summary':
             handleChangeTitle(currentTaskId, prevString, newString)    
-    
+
+#Deletes an existing Asana Task if an associated Task to Jira Ticket connection exists
+#Getting deleted jira ticket information from Webhook connected to jira   
 def parseIssueDeleted(payload):
     jiraId = payload['issue']['key']
     currentTaskId = getTaskIdByJiraId(jiraId, 1)
     
     deleteTaskById(currentTaskId)
-    
+
+#API Endpoint connected to Jira   
 @app.route('/jiraWebHook', methods=['POST'])
 def webHookJira():
     request_data = request.get_json()
@@ -295,6 +325,7 @@ def webHookJira():
             
     return ''
 
+#Creates a new Asana Task when syncing Jira to Asana
 def createAsanaTaskFromIssue(request_data, ignoreJiraList):
     payloadList = request_data['issues']
     for payloadJira in payloadList:
@@ -314,7 +345,8 @@ def createAsanaTaskFromIssue(request_data, ignoreJiraList):
         if jiraId not in ignoreJiraList:
             taskId = createAsanaTask(title, description, assignee, dueDate, priority, type, jiraId)
             handleChangeTaskStatus(taskId, "To Do", status)
-            
+
+#API endpoint to create Asana Tasks from Jira            
 @app.route('/syncToAsana', methods=['GET'])
 def syncToAsana():
     
