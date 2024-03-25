@@ -42,7 +42,7 @@ def createComments(taskId, comment):
 def handleChangeTitle(currentTaskId, prevTitle, newTitle):
     updateTask(currentTaskId, {"name" : newTitle})
     
-    #Create Comment for new Name
+    # Create Comment for new Name
     commentStr = "Changed the Task Name from " + prevTitle + " to " + newTitle
     createComments(currentTaskId, commentStr)
 
@@ -84,7 +84,7 @@ def handleChangeDescription(currentTaskId, prevDescription, newDescription):
 
 #Handles Assignee Changes on Jira Issue and updates Asana Task Assignee     
 def handleChangeAssignee(currentTaskId, prevAssignee, newAssignee):
-    userNameToIdMap = {"Alan PHNX" : "1206848302395917"}
+    userNameToIdMap = {"Alan PHNX" : "1206848302395917", "Charlie Roshan" : "1206848566675565"}
     
     newAssigneeId = userNameToIdMap.get(newAssignee)
     updateTask(currentTaskId, {"assignee" : newAssigneeId})
@@ -96,7 +96,7 @@ def handleChangeAssignee(currentTaskId, prevAssignee, newAssignee):
         newAssignee = 'No Assignee'
     
     #Create Comment for new assignee
-    commentStr = "From Jira: Changed Assignee from " + prevAssignee + " to " + newAssignee
+    commentStr = "Changed Assignee from " + prevAssignee + " to " + newAssignee
     createComments(currentTaskId, commentStr)
 
 #Handles Status Changes on Jira Issue and updates Asana Task     
@@ -125,7 +125,8 @@ def handleChangeTaskStatus(currentTaskId, prevStatus, newStatus):
         updateTask(currentTaskId, data)
 
     #Create Comment for Status Change
-    commentStr = "From Jira: Changed Task Status from " + prevStatus + " to " + newStatus
+    mapJiraNameToAsana = {"To Do" : "New Requests", "In Progress" : "In Active Sprint", "Ready for Launch" : "Complete", "Launched" : "Launched" }
+    commentStr = "Changed Task Status from " + mapJiraNameToAsana.get(prevStatus) + " to " + mapJiraNameToAsana.get(newStatus)
     createComments(currentTaskId, commentStr)
 
 #API call to update jira issue

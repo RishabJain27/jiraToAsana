@@ -55,8 +55,8 @@ def updateTask(taskId, data):
     
     try:
         # Update a task
-        tasks_api_instance.update_task(body, taskId, opts)
-    except ApiException as e:
+        response = tasks_api_instance.update_task(body, taskId, opts)
+    except Exception as e:
         pprint("Exception when calling TasksApi->update_task: %s\n" % e)
         
 #API call to Asana to get all Task's gid associated with Web Production Requests Project
@@ -72,38 +72,6 @@ def getWebProductionTasks():
         pprint("Exception when calling TasksApi->get_tasks_for_project: %s\n" % e)
     
     return []
-
-# Finds field in Asana Task and returns field value
-# Return True/False whether that field exits in Task Data
-def parseTaskDataByField(taskData, field):
-    if taskData is None or field is None:
-        return False, None
-    
-    if field == "notes":
-        return True, taskData['notes']
-    elif field == "name":
-        return True, taskData['name']
-    elif field == 'assignee':
-        if taskData['assignee'] is not None:
-            return True, taskData['assignee']['name'] #assigned to a Person
-        else:
-            return True, None #unassigned
-    elif field == 'due_on':
-        return True, taskData['due_on'] 
-
-    return False, None
-
-#Get Task field resource from Asana Task given TaskId and field name    
-def getNewTaskResource(taskId, field):
-    if taskId is None:
-        return False, None
-    
-    taskData = getTaskFromId(taskId)
-    
-    if taskData is None:
-        return False, None
-    else:
-        return parseTaskDataByField(taskData, field)
 
 #API call to Jira to get Jira Issue given Asana Task ID
 def getJiraTaskByAsanaId(taskId):
@@ -140,10 +108,26 @@ def deleteJiraIssue(jiraId):
         auth=auth
     )
 
-    print("Delete Jira = %s" % response)
+# API call to Jira to get latest comment on Issue
+def getLatestJiraComment(id):
+    commentUrl = jira_url + 'issue/' + id + '/comment'
+    
+    response = requests.request(
+    "GET",
+    commentUrl,
+    headers=headers,
+    auth=auth
+    )
+    response = json.loads(response.text)
 
 #API call to Jira to create Comment on Issue
 def createJiraComments(id, property, data):
+    lastComment = ''
+    try:
+        lastComment = str(getLatestJiraComment(id))
+    except Exception as e:
+        print("error getting latest comment")
+        
     commentUrl = jira_url + 'issue/' + id + '/comment'
     headers = {
         "Accept": "application/json",
@@ -153,14 +137,16 @@ def createJiraComments(id, property, data):
     #Format comment depending on property value
     comment = ""
     if property == 'summary': 
-        comment += "Changed Title/Summary to: " + data
+        comment += "Changed Title/Summary to " + data
     elif property == 'description':
-        comment += "Changed the description."
+        comment += "Changed the description "
+        if(data is not None or data != None):
+            comment += " to " +  str(data['content'][0]['content'][0]['text'])
     elif property == 'assignee':
         if data == None or data is None:
             name = 'No assignee'
         else:
-            userNameToIdMap = {"712020:7b0b4b10-52e5-43c6-b5da-c168422a0c16" : "Alan Wang" }
+            userNameToIdMap = {"712020:7b0b4b10-52e5-43c6-b5da-c168422a0c16" : "Alan Wang", "712020:68a6843e-1d90-4261-bbd3-592fdcd0690c" : "Charlie Roshan" }
             name = userNameToIdMap.get(data)
         comment += "Changed Assignee to " + name
     elif property == 'duedate':
@@ -172,9 +158,17 @@ def createJiraComments(id, property, data):
     elif property == 'priority':
         priorityMap = {"1" : "Highest", "2" : "High", "3" : "Medium", "4" : "Low", "5" : "Lowest"}
         comment += "Changed priority to " + priorityMap.get(data)
+    elif property == 'status':
+        #Mapping Jira Id to Name
+        statusMap = {"21" : "To Do", "31" : "In Progress", "41" : "Ready for Launch", "51" : "Launched"}
+        comment += "Changed status to " + statusMap.get(data)
     else:
         return
 
+    #Avoid duplicates
+    if str(comment) == str(lastComment):
+        return
+    
     payload = json.dumps( {
     "body": {
         "content": [
@@ -200,12 +194,10 @@ def createJiraComments(id, property, data):
         headers=headers,
         auth=auth
     )
-    #print(response)
 
-#Update Task when updating a user change
+#API call to Jira to update Task when updating a user change
 def updateIssueUser(id, userId):
     issueUrl = jira_url + 'issue/' + id + '/assignee'
-    
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json"
@@ -214,7 +206,6 @@ def updateIssueUser(id, userId):
     payload = json.dumps( {
         "accountId": userId        
     })
-    #print("update Issue User pyalod = %s" % payload)
     response = requests.request(
         "PUT",
         issueUrl,
@@ -222,10 +213,9 @@ def updateIssueUser(id, userId):
         headers=headers,
         auth=auth
     )
-    #print("update Issue User respponse = %s" % response)
 
 #API call to Jira to update Workflow state (To Do, In Progress, Ready for Launch, Launched)
-def transitionJiraIssue(id, propertyKey, payload):
+def transitionJiraIssue(id, propertyKey, data):
     issueUrl = jira_url + 'issue/' + id + '/transitions'
     
     headers = {
@@ -233,7 +223,7 @@ def transitionJiraIssue(id, propertyKey, payload):
         "Content-Type": "application/json"
     }
 
-    payload = json.dumps({ "transition": {propertyKey: payload}})
+    payload = json.dumps({ "transition": {propertyKey: data}})
     try: 
         request_response = requests.request(
             "POST",
@@ -242,7 +232,8 @@ def transitionJiraIssue(id, propertyKey, payload):
             headers=headers,
             auth=auth
         )
-        print(request_response)
+        #Create Comment with updated status
+        createJiraComments(id, "status", data)
     except requests.exceptions.HTTPError as err:
         print("Error updating Jira Issue : %s" % err.args[0])
 
@@ -263,14 +254,13 @@ def updateJiraIssue(id, propertyKey, payload):
             headers=headers,
             auth=auth
         )
-        #print(request_response)
     except requests.exceptions.HTTPError as err:
         print("Error updating Jira Issue : %s" % err.args[0])
 
 #API call to create Jira issue provided necessary values        
 def createJiraIssue(gid, title, description, assignee, due_date, status, priority, type):
     # Edit information for Jira
-    userNameToIdMap = {"Alan Wang" : "712020:7b0b4b10-52e5-43c6-b5da-c168422a0c16"}
+    userNameToIdMap = {"Alan Wang" : "712020:7b0b4b10-52e5-43c6-b5da-c168422a0c16", "Charlie Roshan" : "712020:68a6843e-1d90-4261-bbd3-592fdcd0690c"}
     if assignee is not None:
         assignee = userNameToIdMap.get(assignee)
     
@@ -337,16 +327,62 @@ def createJiraIssue(gid, title, description, assignee, due_date, status, priorit
     
     except requests.exceptions.HTTPError as err:
         print("Error creating Jira Issue : %s" % err.args[0])
+
+# Finds field in Asana Task and returns field value
+# Return True/False whether that field exits in Task Data
+def parseTaskDataByField(taskData, field):
+    if taskData is None or field is None:
+        return False, None
     
+    if field == "notes":
+        return True, taskData['notes']
+    elif field == "name":
+        return True, taskData['name']
+    elif field == 'assignee':
+        if taskData['assignee'] is not None:
+            return True, taskData['assignee']['name'] #assigned to a Person
+        else:
+            return True, None #unassigned
+    elif field == 'due_on':
+        return True, taskData['due_on'] 
+
+    return False, None
+
+#Get Task field resource from Asana Task given TaskId and field name    
+def getNewTaskResource(taskId, field):
+    if taskId is None:
+        return False, None
+    
+    taskData = getTaskFromId(taskId)
+    
+    if taskData is None:
+        return False, None
+    else:
+        return parseTaskDataByField(taskData, field)
+        
 #Sets Jira Notes Field with updated value
-def setJiraNotesField(description, newValue):
-    for message in description['content']:
-        for nestedMessage in message['content']:
-            nestedMessage['text'] = newValue
+def setJiraNotesField(newValue):
+    newDesc = {
+        "content": [
+        {
+        "content": [
+            {
+            "text": newValue,
+            "type": "text"
+            }
+        ],
+        "type": "paragraph"
+        }
+    ],
+    "type": "doc",
+    "version": 1
+    }
+    return newDesc
+    
 
 #Helper function to get assignee Id
 def setJiraAssigneeField(assignee):
-    mapJiraToAsanaNames = {"Alan Wang" : "712020:7b0b4b10-52e5-43c6-b5da-c168422a0c16"}
+    mapJiraToAsanaNames = {"Alan Wang" : "712020:7b0b4b10-52e5-43c6-b5da-c168422a0c16", "Charlie Roshan" : "712020:68a6843e-1d90-4261-bbd3-592fdcd0690c"}
     assignee = mapJiraToAsanaNames.get(assignee)
     if assignee != '' or assignee is not None: 
         return assignee
@@ -355,10 +391,9 @@ def setJiraAssigneeField(assignee):
 
 #Parses Jira issue given field value and returns new Jira value            
 def parseJiraIssue(issue, field, newValue):
-    #pprint("field = %s" % field)
     if field == "notes":
         description = issue['fields']['description']
-        setJiraNotesField(description, newValue)
+        description = setJiraNotesField(newValue)
         return "description", description
     elif field == 'name':
         summary = newValue
@@ -378,11 +413,13 @@ def filterJiraTask(taskId, field, newValue):
     issues = jiraTask['issues']
     for issue in issues:
         property, data = parseJiraIssue(issue, field, newValue)
-        print("property = %s" % property)
-        print("Data = %s" % data)
         createJiraComments(issue['id'], property, data)
         if property == 'assignee':
             updateIssueUser(issue['id'], data)
+            # No valid user in Jira set assignee in Asana to know
+            # Keeps Jira and Asana synced
+            if data is None:
+                updateTask(taskId, {"assignee" : data})
         else: 
             updateJiraIssue(issue['id'], property, data)
 
@@ -433,45 +470,43 @@ def parseAsanaTask(task):
 #Web Hook for Changes for default/Milestone Task
 @asana_routes.route("/asanaWebHook", methods=['POST'])
 def asanaWebHook():
-    #print("in asanaWebHook")
+    # Multithreading function to avoid timeout
+    # API response will return 200 Ok while Asana tasks continuing to be created
     request_data = request.get_json()
-    print("data = %s" % request_data)
-    
-    if request_data['events'] != None:
-        #print("for loop")
-        for event in request_data['events']:
-            #print("inside for")
-            valid = False
-            taskId = None
-            field = None
-            
-            try :
-                if event['resource'] != None:
-                    taskId = event['resource']['gid']
+    def long_running_Task(**kwargs):
+        request_data = kwargs.get('request_data', {})
+        if request_data['events'] != None:
+            for event in request_data['events']:
+                valid = False
+                taskId = None
+                field = None
                 
-                if event['change'] != None:
-                    field = event['change']['field']
+                try :
+                    if event['resource'] != None:
+                        taskId = event['resource']['gid']
                     
-                print("field = %s" % field)
-                print("taskId = %s" % taskId)
-                if field != None and field == 'custom_fields': #special case for Priority field
-                    if event['change']['new_value'] != None and event['change']['new_value']['enum_value'] != None:
-                        newPriorityValue = event['change']['new_value']['enum_value']['gid']
-                        #print("newPriorVal = %s" % newPriorityValue)
-                        jiraTask = getJiraTaskByAsanaId(taskId)
-                        issues = jiraTask['issues']
-                        for issue in issues:
-                            priorityId = convertAsanaPriorityToJira(newPriorityValue)
-                            updateJiraIssue(issue['id'], "priority", {"id" : priorityId})
-                            createJiraComments(issue['id'], "priority", priorityId)
-                else:
-                    valid, newValue = getNewTaskResource(taskId, field)
-                    print("valid = %s" % valid)
-                    print("newValue = %s" % newValue)
-                    if valid:
-                        filterJiraTask(taskId, field, newValue)
-            except Exception as e:
-                print("Error parsing incoming Asana WebHook Information %s" % repr(e))
+                    if event['change'] != None:
+                        field = event['change']['field']
+                        
+                    if field != None and field == 'custom_fields': #special case for Priority field
+                        if event['change']['new_value'] != None and event['change']['new_value']['enum_value'] != None:
+                            newPriorityValue = event['change']['new_value']['enum_value']['gid']
+                            jiraTask = getJiraTaskByAsanaId(taskId)
+                            issues = jiraTask['issues']
+                            for issue in issues:
+                                priorityId = convertAsanaPriorityToJira(newPriorityValue)
+                                updateJiraIssue(issue['id'], "priority", {"id" : priorityId})
+                                createJiraComments(issue['id'], "priority", priorityId)
+                    else:
+                        valid, newValue = getNewTaskResource(taskId, field)
+                        if valid:
+                            filterJiraTask(taskId, field, newValue)
+                except Exception as e:
+                    print("Error parsing incoming Asana WebHook Information %s" % repr(e))
+                    
+    thread = threading.Thread(target=long_running_Task, kwargs={
+        'request_data': request_data})
+    thread.start()
     return {}
 
 #Web Hook for Deleting a Task/Milestone
@@ -519,15 +554,13 @@ def asanaWebHookSection():
 @asana_routes.route("/asanaWebHookCreate", methods=['POST'])
 def asanaWebHookCreate():
     request_data = request.get_json()
-    print(request_data)
     try:
         for event in request_data['events']:
             taskId = event['resource']['gid']
             
             asanaTask = getTaskFromId(taskId)
             gid, title, description, assignee, due_date, status, priority, type, jiraId = parseAsanaTask(asanaTask)
-            print("title = %s" % title)
-            print("jira = %s" % jiraId)
+
             if jiraId == None:
                 jiraId = createJiraIssue(gid, title, description, assignee, due_date, status, priority, type)
                 
@@ -547,6 +580,8 @@ def asanaWebHookCreate():
 def syncToJira():
     listAsanaTasks = list(getWebProductionTasks())
     
+    #Multithreading function to avoid timeout
+    #API response will return 200 Ok while Jira issues continuing to be created
     def long_running_Task(**kwargs):
         
         listAsanaTasks = kwargs.get('listAsanaTasks', {})
