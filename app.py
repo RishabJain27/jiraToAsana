@@ -16,7 +16,7 @@ app.register_blueprint(asana_routes)
 
 #Asana API configurations
 configuration = asana.Configuration()
-configuration.access_token = '2/1206848302395917/1206874990632238:b503b349b4150c8f73c0b5c01d1ec69c'
+configuration.access_token = '<API TOKEN>'
 api_client = asana.ApiClient(configuration)
 tasks_api_instance = asana.TasksApi(api_client)
 sections_api_instance = asana.SectionsApi(api_client)
@@ -24,7 +24,7 @@ stories_api_instance = asana.StoriesApi(api_client)
 
 #Jira API configurations
 jira_url = "https://442561275-team-mcpys4njze6e.atlassian.net/rest/api/3/"
-auth = HTTPBasicAuth("alan-phnx@442561275.asanatest1.us", "ATATT3xFfGF0LB6vcgxkYc_5u1282SmDYu3ADKUE5SaeiJbab7dflLsutr0fP7KGyc3_oEoc1zgSHxNBlCqHihoM5D3fnWk_h5fittSlipUCRdejnOJNfe2am5bK9vs3AySRu2I6x_WKjwHubub2f5Bik9OnsklsYyJc7hDRAdeU9bmFyN63Nts=4CA43465")
+auth = HTTPBasicAuth("alan-phnx@442561275.asanatest1.us", "<API TOKEN>")
 headers = {
     "Accept": "application/json"
 }
